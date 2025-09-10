@@ -1,0 +1,6 @@
+pandas==2.2.3
+numpy==2.2.5
+scikit-learn==1.7.2
+matplotlib==3.10.1
+seaborn==0.13.2
+notebook==7.2.1
