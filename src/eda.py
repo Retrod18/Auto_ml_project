@@ -88,7 +88,7 @@ def perform_eda(df: pd.DataFrame, target_variable: Union[str, None] = None) -> D
         plt.tight_layout()
         plots['count_plots'] = generate_plot_base64(fig)
         
-#Correlation Heatmap for numerical features 
+#Correlation Heatmap for the numerical features 
     if len(numerical_cols) > 1:
         print("\n=== EDA: Correlation Heatmap ===")
         fig, ax = plt.subplots(figsize=(12, 10))
@@ -97,7 +97,6 @@ def perform_eda(df: pd.DataFrame, target_variable: Union[str, None] = None) -> D
         ax.set_title('Correlation Heatmap', fontsize=16)
         plots['correlation_heatmap'] = generate_plot_base64(fig)
         
-        #strongest correlation
         insights['strongest_correlations'] = {}
         corr_matrix = df[numerical_cols].corr().abs()
         corr_pairs = corr_matrix.unstack().sort_values(kind="quicksort", ascending=False)
