@@ -148,7 +148,7 @@ if run_button and uploaded_file is not None:
             with st.expander("Step 6: Model Evaluation", expanded=True):
                 eval_results = results.get('model_evaluation', {})
                 if eval_results:
-                    st.subheader("Evaluation Scores")
+                    st.subheader("Evaluation Scores Of Train Data")
                     
                     train_metrics = eval_results.get('train_metrics')
                     if train_metrics:
@@ -156,6 +156,7 @@ if run_button and uploaded_file is not None:
                     else:
                         st.write("No train metrics available.")
                     
+                    st.subheader("Evaluation Scores Of Test Data")
                     test_metrics = eval_results.get('test_metrics')
                     if test_metrics:
                         st.json(asdict(test_metrics))
