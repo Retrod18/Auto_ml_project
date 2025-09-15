@@ -1,0 +1,9 @@
+{
+    // Tells VS Code the EXACT path to your virtual environment's Python
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+
+    // Tells the error-checker (Pylance) where to find your own project files
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/src"
+    ]
+}

@@ -9,13 +9,13 @@ from typing import List, Dict, Any, Union
 def get_problem_type(df: pd.DataFrame, target_variable: str) -> str:
     if target_variable not in df.columns:
         return "Unsupervised"
+    # Check if the target is categorical or has few unique values
     if pd.api.types.is_categorical_dtype(df[target_variable]) or df[target_variable].nunique() < 20:
         return "Classification"
     else:
         return "Regression"
 
 def generate_plot_base64(fig: plt.Figure) -> str:
-  
     buffer = io.BytesIO()
     fig.savefig(buffer, format='png')
     buffer.seek(0)
@@ -25,24 +25,20 @@ def generate_plot_base64(fig: plt.Figure) -> str:
     return img_base64
 
 def perform_eda(df: pd.DataFrame, target_variable: Union[str, None] = None) -> Dict[str, Any]:
-   
     insights = {}
     plots = {}
     
-#different numerical and categorical columns for visualization
     numerical_cols = df.select_dtypes(include=np.number).columns.tolist()
     categorical_cols = df.select_dtypes(exclude=np.number).columns.tolist()
 
     print("\n=== EDA: Data Overview ===")
     insights['shape'] = df.shape
-    insights['datatypes'] = df.dtypes.to_dict()
+    # --- FIX 1: Convert dtypes to strings for JSON compatibility ---
+    insights['datatypes'] = {k: str(v) for k, v in df.dtypes.to_dict().items()}
     insights['missing_values'] = df.isnull().sum().to_dict()
     insights['statistical_summary'] = df.describe(include='all').to_dict()
     
     print("DataFrame shape:", insights['shape'])
-    print("Data types:\n", insights['datatypes'])
-    print("Missing values per column:\n", insights['missing_values'])
-    print("Statistical Summary:\n", insights['statistical_summary'])
     
     if target_variable:
         problem_type = get_problem_type(df, target_variable)
@@ -52,43 +48,33 @@ def perform_eda(df: pd.DataFrame, target_variable: Union[str, None] = None) -> D
         insights['problem_type'] = "Unsupervised"
         print("\nNo target variable provided. Assuming unsupervised learning.")
 
-#Histograms for Numerical Features
+    # Histograms for Numerical Features
     if numerical_cols:
         print("\n=== EDA: Histograms for Numerical Features ===")
         num_plots = len(numerical_cols)
         fig, axes = plt.subplots(nrows=num_plots, ncols=1, figsize=(10, 5 * num_plots))
-        
         if not isinstance(axes, (np.ndarray, list)):
             axes = [axes]
-            
         for i, col in enumerate(numerical_cols):
             sns.histplot(data=df, x=col, kde=True, ax=axes[i])
             axes[i].set_title(f'Distribution of {col}', fontsize=14)
-            axes[i].set_xlabel(col)
-            axes[i].set_ylabel('Frequency')
-        
         plt.tight_layout()
         plots['histograms'] = generate_plot_base64(fig)
         
-#Count Plots for Categorical Features
+    # Count Plots for Categorical Features
     if categorical_cols:
         print("\n=== EDA: Count Plots for Categorical Features ===")
         cat_plots = len(categorical_cols)
         fig, axes = plt.subplots(nrows=cat_plots, ncols=1, figsize=(10, 5 * cat_plots))
-        
         if not isinstance(axes, (np.ndarray, list)):
             axes = [axes]
-
         for i, col in enumerate(categorical_cols):
             sns.countplot(y=col, data=df, ax=axes[i], order=df[col].value_counts().index)
             axes[i].set_title(f'Count Plot of {col}', fontsize=14)
-            axes[i].set_xlabel('Count')
-            axes[i].set_ylabel(col)
-        
         plt.tight_layout()
         plots['count_plots'] = generate_plot_base64(fig)
         
-#Correlation Heatmap for the numerical features 
+    # Correlation Heatmap for numerical features
     if len(numerical_cols) > 1:
         print("\n=== EDA: Correlation Heatmap ===")
         fig, ax = plt.subplots(figsize=(12, 10))
@@ -97,53 +83,28 @@ def perform_eda(df: pd.DataFrame, target_variable: Union[str, None] = None) -> D
         ax.set_title('Correlation Heatmap', fontsize=16)
         plots['correlation_heatmap'] = generate_plot_base64(fig)
         
-        insights['strongest_correlations'] = {}
-        corr_matrix = df[numerical_cols].corr().abs()
-        corr_pairs = corr_matrix.unstack().sort_values(kind="quicksort", ascending=False)
-        unique_pairs = corr_pairs[corr_pairs != 1.0]
-        unique_pairs = unique_pairs[~unique_pairs.index.map(lambda x: x[0] == x[1])]
-        insights['strongest_correlations'] = unique_pairs.head(5).to_dict()
-        
-#Target Distribution Plot
+        # --- FIX 2: Convert tuple keys to strings for JSON compatibility ---
+        corr_abs = corr_matrix.abs().unstack()
+        corr_pairs = corr_abs[corr_abs < 1].sort_values(ascending=False)
+        strongest_corr_dict = corr_pairs.head(5).to_dict()
+        insights['strongest_correlations'] = {f"{k[0]} & {k[1]}": v for k, v in strongest_corr_dict.items()}
+
+    # Target Distribution Plot
     if target_variable and target_variable in df.columns:
         print(f"\n=== EDA: Distribution of Target Variable '{target_variable}' ===")
         fig, ax = plt.subplots(figsize=(8, 6))
-        
         problem_type = get_problem_type(df, target_variable)
         if problem_type == "Classification":
             sns.countplot(x=target_variable, data=df, ax=ax)
-            ax.set_title(f'Target Variable Distribution (Classification)', fontsize=14)
         else: # Regression
             sns.histplot(data=df, x=target_variable, kde=True, ax=ax)
-            ax.set_title(f'Target Variable Distribution (Regression)', fontsize=14)
-            
+        ax.set_title(f'Target Variable Distribution ({problem_type})', fontsize=14)
         plt.tight_layout()
         plots['target_distribution'] = generate_plot_base64(fig)
-# Combining insights and plots into a single dictionary
+
     eda_results = {
         'insights': insights,
         'plots': plots
     }
 
     return eda_results
-
-# Example for local testing
-if __name__ == "__main__":
-    data = {'A': [1, 2, 3, 4, 5],
-            'B': ['X', 'Y', 'X', 'Z', 'Y'],
-            'C': [10.1, 20.2, 30.3, 40.4, 50.5],
-            'Target_Cat': ['Cat1', 'Cat2', 'Cat1', 'Cat2', 'Cat1'],
-            'Target_Num': [100, 200, 150, 250, 180]}
-    
-    test_df = pd.DataFrame(data)
-    results_cat = perform_eda(test_df, target_variable='Target_Cat')
-    print("\n--- EDA Results for Categorical Target ---")
-    print("Insights:", results_cat['insights'])
-
-    results_num = perform_eda(test_df, target_variable='Target_Num')
-    print("\n--- EDA Results for Numerical Target ---")
-    print("Insights:", results_num['insights'])
- 
-    results_no_target = perform_eda(test_df)
-    print("\n--- EDA Results with No Target ---")
-    print("Insights:", results_no_target['insights'])
