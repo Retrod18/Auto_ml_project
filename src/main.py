@@ -1,4 +1,4 @@
-# src/main.py
+# src/main.py 72
 
 import pandas as pd
 import os
@@ -8,6 +8,8 @@ from data_processing import process_data, to_camel_case
 from eda import perform_eda
 from feature_engineering import preprocess_features
 from model_selection import get_models
+from model_evaluation import model_train 
+
 
 def run_pipeline(file_path: str, target_variable: str):
     """
@@ -66,10 +68,25 @@ def run_pipeline(file_path: str, target_variable: str):
         # --- Step 5: Model Selection ---
         problem_type = eda_results.get('insights', {}).get('problem_type', 'unsupervised').lower()
         models = get_models(problem_type)
+        
         all_results['model_selection'] = {
             'problem_type': problem_type,
             'models_selected': list(models.keys())
         }
+        
+        # 6. Model Training & Evaluation (new)
+        if problem_type in ["regression", "classification", "clustering"]:
+            trainer_artifact = model_train(
+                df=processed_df,
+                target=target_variable,
+                models=models,
+                task_type=problem_type
+            )
+            all_results['model_evaluation'] = {
+                'train_metrics': trainer_artifact.train_metric_artifact,
+                'test_metrics': trainer_artifact.test_metric_artifacts,
+                'best_model_name': trainer_artifact.model_name
+            }
         
     except Exception as e:
         all_results['error'] = str(e)

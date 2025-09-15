@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import tempfile
 import io
-
+from dataclasses import asdict
 # This is the crucial fix for Python's import system.
 # It allows the app to find the modules inside the 'src' folder.
 import sys
@@ -142,6 +142,38 @@ if run_button and uploaded_file is not None:
                 models = results.get('model_selection', {}).get('models_selected', [])
                 for model in models:
                     st.markdown(f"- `{model}`")
+            
+            # Step 6: Model Evaluation
+                        
+            with st.expander("Step 6: Model Evaluation", expanded=True):
+                eval_results = results.get('model_evaluation', {})
+                if eval_results:
+                    st.subheader("Evaluation Scores")
+                    
+                    train_metrics = eval_results.get('train_metrics')
+                    if train_metrics:
+                        st.json(asdict(train_metrics))
+                    else:
+                        st.write("No train metrics available.")
+                    
+                    test_metrics = eval_results.get('test_metrics')
+                    if test_metrics:
+                        st.json(asdict(test_metrics))
+                    else:
+                        st.write("No test metrics available.")
+                    
+                    st.subheader("Best Model")
+                    best_model = eval_results.get('best_model_name')
+                    if best_model:
+                        st.markdown(f"- `{best_model}`")
+                    else:
+                        st.write("No best model available.")
+                else:
+                    st.write("No evaluation metrics available.")
+
+
+                                                
+            
 
         # Clean up the temporary file
         os.remove(tmp_path)
