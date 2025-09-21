@@ -1,95 +1,82 @@
+# In model_training_evaluation.py
+
 import pandas as pd
-from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score,
-    r2_score, mean_squared_error, mean_absolute_error,
-    silhouette_score
-)
-import numpy as np
-from typing import Dict, Any
+from sklearn.metrics import accuracy_score, r2_score, silhouette_score
 
-def _evaluate_single_model(model: Any, X_data: pd.DataFrame, y_data: pd.Series, task_type: str) -> Dict[str, Any]:
-    """Helper to calculate metrics for a single trained model on a given dataset."""
-    results = {}
-    
-    try:
-        if task_type == "classification":
-            y_pred = model.predict(X_data)
-            results["accuracy"] = accuracy_score(y_data, y_pred)
-            results["precision"] = precision_score(y_data, y_pred, average="weighted", zero_division=0)
-            results["recall"] = recall_score(y_data, y_pred, average="weighted", zero_division=0)
-            results["f1_score"] = f1_score(y_data, y_pred, average="weighted", zero_division=0)
+def train_and_evaluate_models(train_df, test_df, target_variable, problem_type, models):
+    """
+    Trains and evaluates a dictionary of models based on the problem type.
 
-        elif task_type == "regression":
-            y_pred = model.predict(X_data)
-            results["r2_score"] = r2_score(y_data, y_pred)
-            results["mean_squared_error"] = mean_squared_error(y_data, y_pred)
-            results["mean_absolute_error"] = mean_absolute_error(y_data, y_pred)
-            
-        elif task_type == "unsupervised":
-            y_pred = model.labels_
-            results["silhouette_score"] = silhouette_score(X_data, y_pred)
-            
-    except Exception as e:
-        results["error"] = str(e)
-        
-    return results
+    Args:
+        train_df (pd.DataFrame): The training dataset.
+        test_df (pd.DataFrame): The testing dataset.
+        target_variable (str or None): The name of the target variable.
+        problem_type (str): 'classification', 'regression', or 'clustering'.
+        models (dict): A dictionary of model instances to train.
 
-def train_and_evaluate_models(
-    train_df: pd.DataFrame,
-    test_df: pd.DataFrame,
-    target_variable: str,
-    problem_type: str,
-    models: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Trains a set of models on pre-split data and returns a full report."""
-    print("\n--- Starting Model Training & Evaluation ---")
-    
-    is_unsupervised = problem_type == "unsupervised"
-    
-    if not is_unsupervised:
+    Returns:
+        dict: A dictionary containing evaluation results.
+    """
+    all_model_reports = {}
+    best_model_name = None
+    best_model_score = -1 # Use -1 for regression/classification, needs adjustment for clustering
+
+    # --- THIS IS THE CRITICAL FIX ---
+    # Separate features (X) and target (y) based on whether a target_variable is provided.
+    if target_variable and target_variable in train_df.columns:
+        # Supervised path
         X_train = train_df.drop(columns=[target_variable])
         y_train = train_df[target_variable]
         X_test = test_df.drop(columns=[target_variable])
         y_test = test_df[target_variable]
-    else: 
-        X_train, y_train = train_df, None
-        X_test, y_test = test_df, None
-
-    all_model_reports = {}
-    best_primary_score = -np.inf 
-    best_model_name = ""
+    else:
+        # Unsupervised path (target_variable is None)
+        X_train = train_df
+        y_train = None  # No target
+        X_test = test_df
+        y_test = None   # No target
 
     for name, model in models.items():
         try:
-            print(f"Training {name}...")
+            # Train the model
+            # Note: scikit-learn clustering models ignore the `y` argument if provided.
             model.fit(X_train, y_train)
-
-            eval_X = X_train if is_unsupervised else X_test
-            eval_y = y_train if is_unsupervised else y_test
             
-            report = _evaluate_single_model(model, eval_X, eval_y, problem_type)
+            # --- Evaluation Logic ---
+            report = {}
+            if problem_type == 'classification':
+                preds = model.predict(X_test)
+                score = accuracy_score(y_test, preds)
+                report['accuracy'] = score
+            
+            elif problem_type == 'regression':
+                preds = model.predict(X_test)
+                score = r2_score(y_test, preds)
+                report['r2_score'] = score
+            
+            elif problem_type == 'clustering':
+                # Predict cluster labels for each point
+                preds = model.fit_predict(X_train)
+                # Silhouette score requires at least 2 clusters
+                if len(set(preds)) > 1:
+                    score = silhouette_score(X_train, preds)
+                    report['silhouette_score'] = score
+                else:
+                    score = -1 # Cannot compute score for a single cluster
+                    report['silhouette_score'] = 'N/A (1 cluster found)'
+
             all_model_reports[name] = report
-            
-            primary_metric = -np.inf
-            if problem_type == "regression":
-                primary_metric = report.get("r2_score", -np.inf)
-            elif problem_type == "classification":
-                primary_metric = report.get("accuracy", -np.inf)
-            elif problem_type == "unsupervised":
-                primary_metric = report.get("silhouette_score", -np.inf)
 
-            if primary_metric > best_primary_score:
-                best_primary_score = primary_metric
+            # Update best model
+            if score > best_model_score:
+                best_model_score = score
                 best_model_name = name
 
         except Exception as e:
-            all_model_reports[name] = {"error": str(e)}
+            all_model_reports[name] = {'error': str(e)}
 
-    print(f"Best Model Found: {best_model_name} (Primary Score: {best_primary_score:.4f})")
-    
     return {
         'best_model_name': best_model_name,
-        'best_model_score': best_primary_score,
+        'best_model_score': best_model_score,
         'all_model_reports': all_model_reports
     }
-
